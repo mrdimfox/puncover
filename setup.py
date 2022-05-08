@@ -42,5 +42,6 @@ setup(name='puncover',
       test_suite='nose.collector',
       cmdclass={
           'clean': CleanCommand,
-      }
+      },
+      python_requires='>=3, <3.8',
       )
