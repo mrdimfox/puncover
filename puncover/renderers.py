@@ -1,13 +1,17 @@
-from collections import Iterable
-import os
 import re
-from flask import Flask, render_template, abort, redirect, request
+from flask import render_template, abort, redirect, request
 from flask.helpers import url_for
 from flask.views import View
 import itertools
 import jinja2
 import markupsafe
-from werkzeug.urls import Href
+from werkzeug.urls import url_parse, url_encode
+
+try:
+    from collections import Iterable  # python<3.8
+except:
+    from collections.abc import Iterable
+    
 
 from puncover.backtrace_helper import BacktraceHelper
 from puncover import collector
@@ -25,7 +29,7 @@ def renderer_from_context(context):
 def symbol_file(value):
     return value.get(collector.BASE_FILE, '__builtin')
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbol_url_filter(context, value):
     renderer = renderer_from_context(context)
     if renderer:
@@ -33,7 +37,7 @@ def symbol_url_filter(context, value):
 
     return None
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbol_file_url_filter(context, value):
     f = value.get(collector.FILE, None)
     return symbol_url_filter(context, f) if f else None
@@ -63,26 +67,26 @@ def traverse_filter_wrapper(value, func):
     result = symbol_traverse(value, func)
     return result if result != 0 else ""
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbol_code_size_filter(context, value):
     return traverse_filter_wrapper(value, lambda s: s.get(collector.SIZE, None) if s.get(collector.TYPE, None) == collector.TYPE_FUNCTION else 0)
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbol_var_size_filter(context, value):
     return traverse_filter_wrapper(value, lambda s: s.get(collector.SIZE, None) if s.get(collector.TYPE, None) == collector.TYPE_VARIABLE else 0)
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbol_stack_size_filter(context, value, stack_base=None):
     if isinstance(stack_base, str):
         stack_base = None
     result = traverse_filter_wrapper(value, lambda s: s.get(collector.STACK_SIZE, None) if s.get(collector.TYPE, None) == collector.TYPE_FUNCTION else None)
     return none_sum(result, stack_base)
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def if_not_none_filter(context, value, default_value=""):
     return value if value is not None else default_value
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def unique_filter(context, value):
     if isinstance(value, Iterable):
         result = []
@@ -94,7 +98,7 @@ def unique_filter(context, value):
     return value
 
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def assembly_filter(context, value):
     renderer = context.parent.get("renderer", None)
     def linked_symbol_name(name):
@@ -133,7 +137,7 @@ def assembly_filter(context, value):
     return s
     # return str("&lt;")
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def symbols_filter(context, value):
     renderer = renderer_from_context(context)
 
@@ -151,7 +155,7 @@ def symbols_filter(context, value):
 
     return value
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def chain_filter(context, value, second_value=None):
     return list(itertools.chain(value, second_value if second_value else []))
 
@@ -160,7 +164,7 @@ def is_int_ge(x, cmp):
     return isinstance(x, int) and x >= cmp
 
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def bytes_filter(context, x):
     if not is_int_ge(x, 0):
         return x
@@ -172,7 +176,7 @@ def bytes_filter(context, x):
     return "%d%s" % (x, result)
 
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def style_background_bar_filter(context, x, total, color=None):
     if not is_int_ge(x, 1) or not is_int_ge(total, 1):
         return ''
@@ -184,7 +188,7 @@ def style_background_bar_filter(context, x, total, color=None):
     percent = 100 * x // total
     return 'background:linear-gradient(90deg, {1} {0}%, transparent {0}%);'.format(percent, color)
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def col_sortable_filter(context, title, is_alpha=False, id=None):
 
     id = title if id is None else id
@@ -206,12 +210,13 @@ def col_sortable_filter(context, title, is_alpha=False, id=None):
     # replace/set ?sort= in URL
     args = request.args.copy()
     args['sort'] = next_sort
-    url = Href(request.base_url, sort=True)
+    query = url_encode(args, sort=True)
+    url = url_parse(request.base_url).replace(query=query)
 
-    return '<a href="%s" class="%s">%s</a>' % (url(args), ' '.join(classes), title)
+    return '<a href="%s" class="%s">%s</a>' % (url.to_url(), ' '.join(classes), title)
 
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def sorted_filter(context, symbols):
     sort_id, sort_order = context.parent['sort'].split('_')
 
@@ -260,10 +265,13 @@ class HTMLRenderer(View):
 
     def url_for(self, endpoint, **values):
         result = url_for(endpoint, **values)
-        href = Href(result)
+
+        query = url_encode(request.args)
+        url = url_parse(result).replace(query=query)
+
         # pass along any query parameters
         # this is kind of hacky as it replaces any existing parameters
-        return href(request.args)
+        return url.to_url()
 
     def url_for_symbol(self, value):
         if value[collector.TYPE] in [collector.TYPE_FUNCTION]:

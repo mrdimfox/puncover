@@ -43,5 +43,5 @@ setup(name='puncover',
       cmdclass={
           'clean': CleanCommand,
       },
-      python_requires='>=3, <3.8',
+      python_requires='>=3, <4.0',
       )

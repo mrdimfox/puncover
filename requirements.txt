@@ -1,8 +1,14 @@
-Flask==0.10.1
-mock==1.3.0
-codecov==2.0.5
-nose-cov==1.6
-Jinja2>=2.4, <3.0
-MarkupSafe>=0.23, <1.0
-itsdangerous>=0.21, <1.0
-Werkzeug >=0.7, <1.0
+Flask>=2.1.2, <3.0
+mock>=4.0.3, <5.0
+codecov>=2.1.12, <3.0
+nose-cov>=1.6, <2.0
+
+## Old requirements for Python <3.8
+# Flask==0.10.1
+# mock==1.3.0
+# codecov==2.0.5
+# nose-cov==1.6
+# Jinja2>=2.4, <3.0
+# MarkupSafe>=0.23, <1.0
+# itsdangerous>=0.21, <1.0
+# Werkzeug >=0.7, <1.0
